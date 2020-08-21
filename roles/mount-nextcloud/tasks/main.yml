@@ -1,0 +1,110 @@
+- name: Install yum-packages for davfs2
+  become: true
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - davfs2
+  tags:
+    - nextcloud
+
+- name: Add the system user to the group davfs2
+  become: true
+  user:
+    name: "{{ system_user }}"
+    groups: davfs2
+    append: yes
+  tags:
+    - nextcloud
+
+- name: Creates directory
+  become: true
+  file:
+    path: /mnt/nextcloud
+    state: directory
+    owner: "{{ system_user }}"
+    group: "{{ system_group }}"
+  tags:
+    - nextcloud
+
+- name: Add mount line to fstab
+  become: true
+  lineinfile:
+    path: /etc/fstab
+    state: present
+    regexp: '^.*nextcloud davfs.*'
+    line: '{{ nextcloud_davfs_url }} /mnt/nextcloud davfs _netdev,noauto,user,uid=chreri,gid={{ system_user }} 0 0'
+  tags:
+    - nextcloud
+
+- name: Clone todo.txt-cli
+  git: repo=https://github.com/todotxt/todo.txt-cli.git
+       dest="{{ tmp_directory }}/todo"
+       force=yes
+  tags:
+    - todo
+
+- name : Run make target as root
+  make :
+    chdir : "{{ tmp_directory }}/todo"
+  become : yes
+  tags:
+    - todo
+
+- name : Run 'make install' target as root
+  make :
+    chdir : "{{ tmp_directory }}/todo"
+    target : install
+  become : yes
+  tags:
+    - todo
+
+- name : Run 'make test' target as root
+  make :
+    chdir : "{{ tmp_directory }}/todo"
+    target : test
+  become : yes
+  tags:
+    - todo
+
+- name: Create a directory for todo.txt-cli config if it does not exist
+  file:
+    path: "/home/{{ system_user }}/.todo"
+    state: directory
+    owner: "{{ system_user }}"
+    group: "{{ system_group }}"
+    mode: "0755"
+  tags:
+    - todo
+
+- name: copy todo.txt-cli config file
+  copy:
+    remote_src: true
+    src: "{{ tmp_directory }}/todo/todo.cfg"
+    dest: "/home/{{ system_user }}/.todo/config"
+    owner: "{{ system_user }}"
+    group: "{{ system_group }}"
+    mode: "0644"
+  tags:
+    - todo
+
+- name: Update todo.txt-cli config file with 
+  become: true
+  lineinfile:
+    path: /home/{{ system_user }}/.todo/config
+    state: present
+    regexp: '^export TODO_DIR'
+    line: 'export TODO_DIR=/mnt/nextcloud'
+  tags:
+    - todo
+
+- name: Update todo.txt-cli config file with 
+  become: true
+  lineinfile:
+    path: /home/{{ system_user }}/.todo/config
+    state: present
+    regexp: '^export TODOTXT_DATE_ON_ADD'
+    line: 'export TODOTXT_DATE_ON_ADD=1'
+  tags:
+    - todo
+
